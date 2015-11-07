@@ -188,10 +188,12 @@ module Lhm
         error("could not find origin table #{ @origin.name }")
       end
 
-      unless @origin.satisfies_id_autoincrement_requirement?
-        if @options[:order_column] && !@origin.can_use_order_column?(@options[:order_column])
-          error("order column needs to be specified because no satisfactory primary key exists")
-        else
+      if @options[:order_column]
+        if !@origin.can_use_order_column?(@options[:order_column])
+          error("origin does not satisfy primary key requirements")
+        end
+      else
+        if !@origin.satisfies_id_autoincrement_requirement?
           error("origin does not satisfy primary key requirements")
         end
       end
