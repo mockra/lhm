@@ -122,7 +122,7 @@ module Lhm
     def monotonically_increasing_numeric_key?(key)
       !!(key &&
          key[:extra] == 'auto_increment' &&
-         key[:type] =~ /int\(\d+\)/)
+         key[:type] =~ /int\(\d+\)/i)
     end
   end
 end
