@@ -3,7 +3,7 @@
 set -e
 set -u
 
-source ~/.lhm
+source `dirname $0`/lhm-config.sh
 
 lhmkill() {
   echo killing lhm-cluster
@@ -15,8 +15,6 @@ lhmkill() {
 
 echo stopping homebrew running mysql instance
 ls -lrt -d -1 ~/Library/LaunchAgents/* |  grep 'mysql.plist' | xargs launchctl unload -w
-
-lhmkill
 
 echo removing $basedir
 rm -rf "$basedir"
