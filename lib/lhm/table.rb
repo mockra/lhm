@@ -23,6 +23,11 @@ module Lhm
       monotonically_increasing_numeric_key?(columns[column_name])
     end
 
+    def satisfies_id_column_requirement?
+      !!((id = columns['id']) &&
+        id[:type] =~ /(bigint|int)\(\d+\)/)
+    end
+
     def destination_name
       "lhmn_#{ @name }"
     end
@@ -41,7 +46,10 @@ module Lhm
       end
 
       def ddl
-        @connection.show_create(@table_name)
+        sql = "show create table `#{ @table_name }`"
+        specification = nil
+        @connection.execute(sql).each { |row| specification = row.last }
+        specification
       end
 
       def parse
@@ -53,13 +61,11 @@ module Lhm
             column_type    = struct_key(defn, 'COLUMN_TYPE')
             is_nullable    = struct_key(defn, 'IS_NULLABLE')
             column_default = struct_key(defn, 'COLUMN_DEFAULT')
-            extra          = struct_key(defn, 'EXTRA')
 
             table.columns[defn[column_name]] = {
               :type => defn[column_type],
               :is_nullable => defn[is_nullable],
               :column_default => defn[column_default],
-              :extra => defn[extra]
             }
           end
 
@@ -121,7 +127,6 @@ module Lhm
 
     def monotonically_increasing_numeric_key?(key)
       !!(key &&
-         key[:extra] == 'auto_increment' &&
          key[:type] =~ /int\(\d+\)/i)
     end
   end

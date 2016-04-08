@@ -17,7 +17,22 @@ describe Lhm::Chunker do
       @migration = Lhm::Migration.new(@origin, @destination, "id")
     end
 
-    it 'should copy 23 rows from origin to destination with time based throttler' do
+    it 'should copy 1  rows from origin to destination even if the id of the single row does not start at 1' do
+      execute("insert into origin set id = 1001 ")
+      printer = Lhm::Printer::Base.new
+
+      def printer.notify(*) ;end
+      def printer.end(*) [] ;end
+
+      Lhm::Chunker.new(@migration, connection, {:throttler => Lhm::Throttler::Time.new(:stride => 100), :printer => printer} ).run
+
+      slave do
+        count_all(@destination.name).must_equal(1)
+      end
+
+    end
+
+    it 'should copy 23 rows from origin to destination' do
       23.times { |n| execute("insert into origin set id = '#{ n * n + 23 }'") }
 
       printer = MiniTest::Mock.new
@@ -43,7 +58,7 @@ describe Lhm::Chunker do
       printer.expect(:end, :return_value, [])
 
       Lhm::Chunker.new(
-        @migration, connection, { :throttler => Lhm::Throttler::SlaveLag.new(:stride => 100, :connection => connection), :printer => printer }
+        @migration, connection, { :throttler => Lhm::Throttler::SlaveLag.new(:stride => 100), :printer => printer }
       ).run
 
       slave do
@@ -60,7 +75,7 @@ describe Lhm::Chunker do
       15.times { printer.expect(:notify, :return_value, [Fixnum, Fixnum]) }
       printer.expect(:end, :return_value, [])
 
-      throttler = Lhm::Throttler::SlaveLag.new(:stride => 10, :allowed_lag => 0, :connection => connection)
+      throttler = Lhm::Throttler::SlaveLag.new(:stride => 10, :allowed_lag => 0)
       def throttler.max_current_slave_lag
         1
       end
@@ -85,12 +100,21 @@ describe Lhm::Chunker do
       15.times { printer.expect(:notify, :return_value, [Fixnum, Fixnum]) }
       printer.expect(:end, :return_value, [])
 
-      throttler = Lhm::Throttler::SlaveLag.new(:stride => 10, :allowed_lag => 0, :connection => connection)
+      throttler = Lhm::Throttler::SlaveLag.new(:stride => 10, :allowed_lag => 0)
 
       def throttler.slave_hosts
-        ["127.0.0.1"]
+        ['127.0.0.1']
       end
 
+      if master_slave_mode?
+        def throttler.slave_connection(slave)
+          adapter_method = defined?(Mysql2) ? 'mysql2_connection' : 'mysql_connection'
+          config = ActiveRecord::Base.connection_pool.spec.config.dup
+          config[:host] = slave
+          config[:port] = 3307
+          ActiveRecord::Base.send(adapter_method, config)
+        end
+      end
 
       Lhm::Chunker.new(
         @migration, connection, { :throttler => throttler, :printer => printer }

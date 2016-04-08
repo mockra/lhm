@@ -25,11 +25,16 @@ module Lhm
     end
 
     def set_session_lock_wait_timeouts
-      global_innodb_lock_wait_timeout = @connection.execute("SHOW GLOBAL VARIABLES LIKE 'innodb_lock_wait_timeout'").first.last.to_i
-      global_lock_wait_timeout = @connection.execute("SHOW GLOBAL VARIABLES LIKE 'lock_wait_timeout'").first.last.to_i
+      global_innodb_lock_wait_timeout = @connection.select_one("SHOW GLOBAL VARIABLES LIKE 'innodb_lock_wait_timeout'")
+      global_lock_wait_timeout = @connection.select_one("SHOW GLOBAL VARIABLES LIKE 'lock_wait_timeout'")
 
-      @connection.execute("SET SESSION innodb_lock_wait_timeout=#{global_innodb_lock_wait_timeout + LOCK_WAIT_TIMEOUT_DELTA}")
-      @connection.execute("SET SESSION lock_wait_timeout=#{global_lock_wait_timeout + LOCK_WAIT_TIMEOUT_DELTA}")
+      if global_innodb_lock_wait_timeout
+        @connection.execute("SET SESSION innodb_lock_wait_timeout=#{global_innodb_lock_wait_timeout['Value'].to_i + LOCK_WAIT_TIMEOUT_DELTA}")
+      end
+
+      if global_lock_wait_timeout
+        @connection.execute("SET SESSION lock_wait_timeout=#{global_lock_wait_timeout['Value'].to_i + LOCK_WAIT_TIMEOUT_DELTA}")
+      end
     end
 
     def run(options = {})
@@ -63,11 +68,7 @@ module Lhm
       end
 
       if options[:throttler]
-        options[:throttler] = Throttler::Factory.create_throttler(*options[:throttler].merge({:connection => @connection}))
-      elsif options[:throttle] || options[:stride]
-        # we still support the throttle and stride as a Fixnum input
-        warn 'throttle option will no longer accept a Fixnum in the next versions.'
-        options[:throttler] = Throttler::LegacyTime.new(options[:throttle], options[:stride])
+        options[:throttler] = Throttler::Factory.create_throttler(options[:throttler])
       else
         options[:throttler] = Lhm.throttler
       end

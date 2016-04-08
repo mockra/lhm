@@ -11,12 +11,14 @@ module Lhm
 
     attr_reader :connection
 
-    # Copy from origin to destination in chunks of size `stride`. Sleeps for
-    # `throttle` milliseconds between each stride.
+    # Copy from origin to destination in chunks of size `stride`.
+    # Use the `throttler` class to sleep between each stride.
     def initialize(migration, connection = nil, options = {})
       @migration = migration
       @connection = connection
-      @throttler = options[:throttler]
+      if @throttler = options[:throttler]
+        @throttler.connection = @connection if @throttler.respond_to?(:connection=)
+      end
       @start = options[:start] || select_start
       @limit = options[:limit] || select_limit
       @printer = options[:printer] || Printer::Percentage.new
@@ -25,7 +27,7 @@ module Lhm
     def execute
       return unless @start && @limit
       @next_to_insert = @start
-      while @next_to_insert < @limit || (@next_to_insert == 1 && @start == 1)
+      while @next_to_insert < @limit || (@start == @limit)
         stride = @throttler.stride
         affected_rows = @connection.update(copy(bottom, top(stride)))
 
@@ -35,6 +37,7 @@ module Lhm
 
         @printer.notify(bottom, @limit)
         @next_to_insert = top(stride) + 1
+        break if @start == @limit
       end
       @printer.end
     end

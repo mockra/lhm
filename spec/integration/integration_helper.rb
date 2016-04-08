@@ -7,7 +7,6 @@ $password = YAML.load_file(File.expand_path(File.dirname(__FILE__)) + '/database
 
 require 'lhm/table'
 require 'lhm/sql_helper'
-require 'lhm/connection'
 
 module IntegrationHelper
   #
@@ -29,10 +28,10 @@ module IntegrationHelper
     adapter = ar_conn port
     Lhm.setup(adapter)
     unless defined?(@@cleaned_up)
-      Lhm.cleanup(true)
+      Lhm.cleanup(:run)
       @@cleaned_up  = true
     end
-    @connection = Lhm::Connection.new(adapter)
+    @connection = adapter
   end
 
   def ar_conn(port)

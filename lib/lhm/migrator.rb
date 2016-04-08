@@ -86,7 +86,7 @@ module Lhm
 
       definition = col[:type]
       definition += ' NOT NULL' unless col[:is_nullable]
-      definition += " DEFAULT #{@connection.quote_value(col[:column_default])}" if col[:column_default]
+      definition += " DEFAULT #{@connection.quote(col[:column_default])}" if col[:column_default]
 
       ddl('alter table `%s` change column `%s` `%s` %s' % [@name, old, nu, definition])
       @renames[old.to_s] = nu.to_s
@@ -189,11 +189,11 @@ module Lhm
       end
 
       if @options[:order_column]
-        if !@origin.can_use_order_column?(@options[:order_column])
+        unless @origin.can_use_order_column?(@options[:order_column])
           error("origin does not satisfy primary key requirements")
         end
       else
-        if !@origin.satisfies_id_autoincrement_requirement?
+        unless @origin.satisfies_id_autoincrement_requirement?
           error("origin does not satisfy primary key requirements")
         end
       end
@@ -207,12 +207,17 @@ module Lhm
 
     def execute
       destination_create
-      @connection.sql(@statements)
+      @statements.each do |stmt|
+        @connection.execute(tagged(stmt))
+      end
       Migration.new(@origin, destination_read, order_column, conditions, renames)
     end
 
     def destination_create
-      @connection.destination_create(@origin)
+      original    = %{CREATE TABLE `#{ @origin.name }`}
+      replacement = %{CREATE TABLE `#{ @origin.destination_name }`}
+      stmt = @origin.ddl.gsub(original, replacement)
+      @connection.execute(tagged(stmt))
     end
 
     def destination_read

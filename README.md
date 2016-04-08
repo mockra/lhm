@@ -22,7 +22,7 @@ is great if you are using this engine, but only solves half the problem.
 At SoundCloud we started having migration pains quite a while ago, and after
 looking around for third party solutions, we decided to create our
 own. We called it Large Hadron Migrator, and it is a gem for online
-ActiveRecord and DataMapper migrations.
+ActiveRecord migrations.
 
 ![LHC](http://farm4.static.flickr.com/3093/2844971993_17f2ddf2a8_z.jpg)
 
@@ -53,6 +53,10 @@ ActiveRecord 3.2.x and 4.x (mysql and mysql2 adapters).
 Due to the Chunker implementation, Lhm requires that the table to migrate has a
 a monotonically increasing numeric column.
 
+Another note about the Chunker, it performs static sized row copies against the `id`
+column.  Therefore sparse assignment of `id` can cause performance problems for the
+backfills.  Typically LHM assumes that `id` is an `auto_increment` style column.
+
 ## Installation
 
 Install it via `gem install lhm` or add `gem "lhm"` to your Gemfile.
@@ -70,9 +74,6 @@ ActiveRecord::Base.establish_connection(
   :host => '127.0.0.1',
   :database => 'lhm'
 )
-
-# or with DataMapper
-Lhm.setup(DataMapper.setup(:default, 'mysql://127.0.0.1/lhm'))
 
 # and migrate
 Lhm.change_table :users do |m|
@@ -111,7 +112,7 @@ to prevent accidental data loss.
 
 ## Throttler
 
-Lhm is using a throttle mecanism to read data in your original table.
+Lhm is using a throttle mechanism to read data in your original table.
 
 By default, 40000 rows are read each 0.1 second.
 
@@ -124,6 +125,21 @@ my_throttler = Lhm::Throttler::Time.new(stride: 1000, delay: 10)
 Lhm.change_table :users, throttler: my_throttler  do |m|
   #
 end
+```
+
+### SlaveLag Throttler
+
+Lhm uses by default the time throttler, however a better solution is to throttle the copy of the data
+depending on the time that the slaves are behind. To use the SlaveLag throttler:
+```ruby
+Lhm.change_table :users, throttler: :slave_lag_throttler  do |m|
+  #
+end
+```
+
+Or to set that as default throttler, use the following (for instance in a Rails initializer):
+```ruby
+Lhm.setup_throttler(:slave_lag_throttler)
 ```
 
 ## Table rename strategies
@@ -180,19 +196,19 @@ Lhm.cleanup
 
 To remove any Lhm tables/triggers found:
 ```ruby
-Lhm.cleanup(true)
+Lhm.cleanup(:run)
 ```
 
 Optionally only remove tables up to a specific Time, if you want to retain previous migrations.
 
 Rails:
 ```ruby
-Lhm.cleanup(true, until: 1.day.ago)
+Lhm.cleanup(:run, until: 1.day.ago)
 ```
 
 Ruby:
 ```ruby
-Lhm.cleanup(true, until: Time.now - 86400)
+Lhm.cleanup(:run, until: Time.now - 86400)
 ```
 
 ## Contributing
